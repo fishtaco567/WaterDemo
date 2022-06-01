@@ -9,6 +9,8 @@ Shader "Sprites/RenderSurface"
 		_EdgeColor("Edge Color", Color) = (1,1,1,1)
 		_YSize("YSize", float) = 5
 		_XSize("XSize", float) = 5
+		_SurfaceRippleSize("Surface Ripple Size", float) = 1
+		_SurfaceRippleSpeed("Surface Ripple Speed", float) = 1
 	}
 
 	SubShader
@@ -19,13 +21,16 @@ Shader "Sprites/RenderSurface"
 			"IgnoreProjector"="True" 
 			"RenderType"="Transparent" 
 			"PreviewType"="Plane"
-			"CanUseSpriteAtlas"="True"
 		}
 
 		Cull Off
 		Lighting Off
 		ZWrite Off
-		Blend SrcAlpha OneMinusSrcAlpha
+
+		GrabPass
+		{
+			"_FullTexture"
+		}
 
 		Pass
 		{
@@ -35,7 +40,7 @@ Shader "Sprites/RenderSurface"
 			#pragma multi_compile _ PIXELSNAP_ON
 			#include "UnityCG.cginc"
 			
-			struct appdata_t
+			struct appdata_t 
 			{
 				float4 vertex   : POSITION;
 				float4 color    : COLOR;
@@ -47,6 +52,8 @@ Shader "Sprites/RenderSurface"
 				float4 vertex   : SV_POSITION;
 				fixed4 color    : COLOR;
 				float2 texcoord  : TEXCOORD0;
+				float4 grabPos : TEXCOORD1;
+				float3 worldPos : TEXCOORD2;
 			};
 
 			v2f vert(appdata_t IN)
@@ -61,16 +68,22 @@ Shader "Sprites/RenderSurface"
 				OUT.vertex = UnityObjectToClipPos(IN.vertex);
 				OUT.texcoord = IN.texcoord;
 				OUT.color = IN.color;
+				OUT.grabPos = ComputeGrabScreenPos(OUT.vertex);
+				OUT.worldPos = mul(unity_ObjectToWorld, IN.vertex);
 
 				return OUT;
 			}
 
 			sampler2D _MainTex;
 			sampler2D _AlphaTex;
+			sampler2D _FullTexture;
 			float _AlphaSplitEnabled;
 
 			float _YSize;
 			float _XSize;
+
+			float _SurfaceRippleSize;
+			float _SurfaceRippleSpeed;
 
 			fixed4 _WaterColor;
 			fixed4 _EdgeColor;
@@ -82,6 +95,12 @@ Shader "Sprites/RenderSurface"
 				return color;
 			}
 
+			float4 SnapToTexel(float4 uv) 
+			{
+				uv.xy = floor(uv.xy * float2(_XSize, _YSize)) / (float2(_XSize, _YSize));
+				return uv;
+			}
+
 			fixed4 frag(v2f IN) : SV_Target
 			{
 				float texLevel = SampleSpriteTexture(IN.texcoord).a;
@@ -89,16 +108,21 @@ Shader "Sprites/RenderSurface"
 				float dif = texLevel - IN.texcoord.y;
 
 				clip(dif);
-
-				float difr = SampleSpriteTexture(IN.texcoord + float2(1 / _XSize, 0)).a - IN.texcoord.y;
-				float difl = SampleSpriteTexture(IN.texcoord - float2(1 / _XSize, 0)).a - IN.texcoord.y;
+				float texr = SampleSpriteTexture(IN.texcoord + float2(1 / _XSize, 0)).a;
+				float texl = SampleSpriteTexture(IN.texcoord - float2(1 / _XSize, 0)).a;
+				float difr = texr - IN.texcoord.y;
+				float difl = texl - IN.texcoord.y;
 
 				float difu = texLevel - (IN.texcoord.y + 1 / _YSize);
-				float r = sign(difu) + sign(difl) + sign(difr) - 3 * sign(dif);
+				float ripple = saturate((sin(_Time.x * _SurfaceRippleSpeed + IN.texcoord.x * _SurfaceRippleSize) + 1) / 1.8);
+				float dif2u = texLevel - (IN.texcoord.y + 2 / _YSize) * ripple;
+				float r = sign(difu) + sign(difl) + sign(difr) + sign(dif2u) - 3 * sign(dif);
 				r *= -1;
-				r = clamp(r, 0, 1);
+				r = saturate(r);
 
 				fixed4 c = _WaterColor * (1 - r) + _EdgeColor * r;
+				fixed4 bgc = tex2Dproj(_FullTexture, IN.grabPos + SnapToTexel(float4(sin((_Time.y * 2) + IN.worldPos.y) / _XSize * 1.5, 0  , 0, 0)));
+				c = bgc * (1 - c.a) + c * c.a;
 
 				return c;
 			}
