@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+﻿ using UnityEngine;
 using System.Collections.Generic;
 using System.Diagnostics;
 using SharpNoise;
@@ -136,7 +136,13 @@ public class WaterRenderer : MonoBehaviour {
     protected float middle;
 
     [SerializeField]
+    protected Particle2DDataSP foamData;
+
+    [SerializeField]
     protected Vector2Int numFoamSplashIntensity;
+
+    [SerializeField]
+    protected Particle2DDataSP dropData;
 
     [SerializeField]
     protected Vector2Int numDropSplashIntensity;
@@ -177,7 +183,9 @@ public class WaterRenderer : MonoBehaviour {
 
         middle = (size.y) / (size.y + upperMarginSize);
 
-        Simulate(0.01f);
+        for(int i = 0; i < 10; i++) {
+            Simulate(0.0166f);
+        }
     }
 
     protected Mesh BuildQuad() {
@@ -227,9 +235,9 @@ public class WaterRenderer : MonoBehaviour {
 
         for(int i = 0; i < w.Length; i++) {
             if(i == 0) {
-                dw[i] += dt * ((-2 * w[i] + 2 * w[i + 1]) * invStepSq * waveSpeed + ForcingFor(time, i * xStepSize) - w[i] * gravity);
+                dw[i] += dt * ((-2.5f * w[i] + 2 * w[i + 1]) * invStepSq * waveSpeed + ForcingFor(time, i * xStepSize) - w[i] * gravity);
             } else if(i == w.Length - 1) {
-                dw[i] += dt * ((-2 * w[i] + 2 * w[i - 1]) * invStepSq * waveSpeed + ForcingFor(time, i * xStepSize) - w[i] * gravity);
+                dw[i] += dt * ((-2.5f * w[i] + 2 * w[i - 1]) * invStepSq * waveSpeed + ForcingFor(time, i * xStepSize) - w[i] * gravity);
             } else {
                 dw[i] += dt * (((-2 * w[i] + 1 * (w[i - 1] + w[i + 1])) * invStepSq) * waveSpeed - damping * dw[i] * invTime + ForcingFor(time, i * xStepSize) - w[i] * gravity);
             }
@@ -288,7 +296,7 @@ public class WaterRenderer : MonoBehaviour {
 
         var xIndex = Mathf.FloorToInt((point.x - ext.min.x) / xStepSize);
         
-        if(xIndex < 0 || xIndex > w.Length) {
+        if(xIndex < 0 || xIndex >= w.Length) {
             return false;
         }
 
